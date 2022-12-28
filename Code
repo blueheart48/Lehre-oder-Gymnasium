@@ -1,0 +1,759 @@
+---
+title: "Sekundar II"
+subtitle: "V04-R00"
+author: |
+  | Roger Megert, roger.megert@uzh.ch, 18-755-850
+  | 
+  |
+  | 
+date: 'Duedate: 07.01.2022'
+output:
+  pdf_document:
+    number_sections: yes
+    template: null
+    fig_caption: yes
+font-size: 12pt
+linestretch: 1.5
+geometry: left=2.5cm,right=2.5cm,top=3cm,bottom=3cm
+header-includes: 
+  - \usepackage{float} 
+  - \floatplacement{figure}{H} 
+  - \floatplacement{table}{H}
+  - \usepackage{fancyhdr} 
+  - \pagestyle{headings} 
+  - \usepackage[german]{babel}
+---
+\pagebreak
+```{r}
+#==========================================================
+#Set Up
+#==========================================================
+# Versionenverzeichniss
+#V04 R00  - Wahrscheinlichkeit über die Jahr abhängig der gesammt anzahl
+
+#V04 R01  - Summierung der einzelnen Bildungstypen
+
+
+#V05 R00  - Erweiteren der Analyse auf die Variable Nationalität 
+#           (Schweiz, Ausland)
+
+
+#         - Änderung des Tabellenformates
+#V05 R01  - Weglassen von Bildungstypen
+#         - Plot 03 & 04 Anteil an Ausländer in Absoluten Zahlen addiert.
+#         - Plot 05 + df.fh Aufteilung FH
+#         - Calculate Tabels
+#         - neues Daten Set df.1stufe
+
+
+#V06 R00  - erstellen der Plots für den Blogbeitrag. Anpassen der 
+#           Farben & Namen der Bildungstypen
+#             - Gymnasiale Maturität
+#             - Fach- & Berufsmaturität
+#             - Berufsbildung EFZ
+#             - Berufsbildung ohne EFZ
+#             - Zwischenlösungen
+#             - df.1Stuf gelöscht
+
+#v06 R01  - Weitere Anpassungen ästhetische Anpassungen für den Blog
+```
+
+```{r}
+#==========================================================
+#Set Up
+#==========================================================
+#----------------------------------------------------------
+#Library
+#----------------------------------------------------------
+pacman::p_load(readxl, ggplot2,dplyr,forcats)
+library(readxl)# load the xlsx data base
+library(ggplot2)# create plots
+library(dplyr)#manipulate dataset
+library(forcats)#umordnen der Bildungstypen im Plot 01
+
+#----------------------------------------------------------
+#WB
+#----------------------------------------------------------
+version.release = "V06R00"
+
+#Set export folder:
+analyse_folder = paste(c("02_Auswertung/", version.release), collapse = "")
+
+#----------------------------------------------------------
+#load data
+#----------------------------------------------------------
+df.ges<-read_excel("00_Data/V05/Geschlecht.xlsx")
+df.lohn<-read_excel("00_Data/V05/Lohn.xlsx")
+
+#Link Data: https://www.pxweb.bfs.admin.ch/pxweb/de/px-x-1502020000_101/px-x-1502020000_101/px-x-1502020000_101.px
+
+```
+
+```{r}
+#==========================================================
+#Delete the not needed Bildungstypen
+#==========================================================
+#Auslandische Allgemeinbildungen (Nicht Schweizer Bildung)
+#Unterrichtsberufe (Auslaufend)
+
+df.ges$`Bildungsstufe und -typ - Total` = 
+  df.ges$`Bildungsstufe und -typ - Total`-
+  df.ges$`Andere und ausländische allgemeinbildende Ausbildungen`-
+  df.ges$Unterrichtsberufe-
+  df.ges$`Andere Übergangsausbildungen Sek. II - Tertiärstufe`
+
+#==========================================================
+#Convert Data frames
+#==========================================================
+
+#`universitäre Hochschule`
+#`Fachhochschule`
+#`Lehrerpatent
+
+#`Berufsausbildung EFZ`
+#`Berufsausubildung EBA und weitere` 
+#`Sekundar II`
+
+#----------------------------------------------------------
+#erstelle df Fachhochschule
+#----------------------------------------------------------
+df.fh = df.ges
+  df.fh$`Fach- & Berufsmaturität` =
+    df.fh$Berufsmaturität+
+    df.fh$Fachmittelschulen+
+    df.fh$Fachmaturität+
+    df.fh$`Handels- und Informatikmittelschulen`
+  
+df.fh = df.fh%>%select(Jahr, 
+                       Geschlecht,
+                       `Bildungsstufe und -typ - Total`,
+                       `Fach- & Berufsmaturität`,
+                       Berufsmaturität,
+                       Fachmittelschulen,
+                       Fachmaturität,
+                       `Handels- und Informatikmittelschulen`)
+
+
+#----------------------------------------------------------
+#Geschlecht
+#----------------------------------------------------------
+
+df=df.ges
+
+  df$`Gymnasiale Maturität` = 
+    df$Passerellenlehrgang+
+    df$`Gymnasiale Maturität`
+
+    
+  df$`Fach- & Berufsmaturität` = 
+    df$Berufsmaturität+
+    df$Fachmittelschulen+
+    df$Fachmaturität+
+    df$`Handels- und Informatikmittelschulen`
+    
+  df$`Berufsbildung EFZ` = 
+    df$`Berufliche Grundbildung mit EFZ`
+    
+  df$`Berufsbildung ohne EFZ` = 
+    df$Anlehre+
+    df$`Nicht BBG-reglementierte berufliche Grundbildung`+
+    df$`Berufliche Grundbildung mit EBA`
+    
+  df$`Zwischenlösungen` =
+    df$`Andere Zusatzausbildungen`+
+    df$`Übergangsausbildungen Sek. I - Sek. II`
+  
+  df= df%>%select(Jahr, Geschlecht, `Bildungsstufe und -typ - Total`,
+                  `Gymnasiale Maturität`,
+                  `Fach- & Berufsmaturität`,
+                  `Berufsbildung EFZ`,
+                  `Berufsbildung ohne EFZ`,
+                  `Zwischenlösungen`)
+  df.ges = df
+rm(df)
+
+```
+
+
+```{r}
+#==========================================================
+#calculate the % per year for 
+#==========================================================
+#----------------------------------------------------------
+#Fachhochschule
+#----------------------------------------------------------
+#Total neu ausrechnen
+
+
+df.fh$`Fach- & Berufsmaturität` = 
+  df.fh$`Fach- & Berufsmaturität`/
+  df.fh$`Bildungsstufe und -typ - Total`*100
+
+df.fh$Berufsmaturität=
+  df.fh$Berufsmaturität/
+  df.fh$`Bildungsstufe und -typ - Total`*100
+
+df.fh$Fachmittelschulen=
+  df.fh$Fachmittelschulen/
+  df.fh$`Bildungsstufe und -typ - Total`*100
+
+df.fh$Fachmaturität=
+  df.fh$Fachmaturität/
+  df.fh$`Bildungsstufe und -typ - Total`*100
+
+df.fh$`Handels- und Informatikmittelschulen`=
+  df.fh$`Handels- und Informatikmittelschulen`/
+  df.fh$`Bildungsstufe und -typ - Total`*100
+
+#----------------------------------------------------------
+#Geschlecht
+#----------------------------------------------------------
+df.ges$`Gymnasiale Maturität`=
+  df.ges$`Gymnasiale Maturität`/
+  df.ges$`Bildungsstufe und -typ - Total`*100
+
+df.ges$`Fach- & Berufsmaturität`=
+  df.ges$`Fach- & Berufsmaturität`/
+  df.ges$`Bildungsstufe und -typ - Total`*100
+
+df.ges$`Berufsbildung EFZ`=
+  df.ges$`Berufsbildung EFZ`/
+  df.ges$`Bildungsstufe und -typ - Total`*100
+
+df.ges$`Berufsbildung ohne EFZ`=
+  df.ges$`Berufsbildung ohne EFZ`/
+  df.ges$`Bildungsstufe und -typ - Total`*100
+
+df.ges$`Zwischenlösungen`=
+  df.ges$`Zwischenlösungen`/
+  df.ges$`Bildungsstufe und -typ - Total`*100
+
+```
+
+
+```{r}
+#==========================================================
+#Plots
+#==========================================================
+#----------------------------------------------------------
+#Theme
+#----------------------------------------------------------
+my_theme <- theme_classic() + theme(
+  panel.grid.major = element_line(color = "#DADADA"),
+  panel.grid.minor = element_line(color = "#DADADA", linetype = "dashed"),
+  panel.border = element_blank(),panel.grid = element_blank(),
+  plot.title = element_text(hjust = 0.5, size = 15),
+  axis.text = element_text(size = 10),
+  axis.title.x = element_text(size = 10),
+  axis.title.y = element_text(size = 10),)
+
+
+#----------------------------------------------------------
+#Plot01 Lohn
+#----------------------------------------------------------
+cols = c("Männer" = "#117bb8", 
+         "Frauen" = "#ceab23")
+df.lohn %>%
+  mutate(Bildung = fct_relevel(Bildung,
+                               "Ohne Abgeschlossene Berufsausbildung",
+                               "Abgeschlossene Berufsausbildung",
+                               "Matura",
+                               "Höhere Berufsausbildung",
+                               "Fachhochschule (FH & PH)",
+                                "Universitäre Hochschule (Uni, ETH)")) %>%
+  ggplot( aes(y=Bildung, x=Lohn, fill = Geschlecht)) +
+    geom_bar(stat="identity", position = "dodge") +
+    geom_text(aes(label=Lohn), 
+            position=position_dodge(width=1), 
+            vjust=0.4, 
+            hjust = +1.2,
+            size = 3.5)+
+    xlab("")+
+    ylab("")+
+    ggtitle("Monatlicher Bruttolohn (Median)")+
+    scale_fill_manual(values = cols)+
+    my_theme
+
+
+ggsave(path = analyse_folder,
+         filename = paste(c("P01-Lohn",
+                            version.release, ".png"),
+                          collapse = ""),
+         height = 5,
+         width = 9,
+         dpi=900)
+
+#----------------------------------------------------------
+#Plot02 Gymnasium herausheben
+#----------------------------------------------------------
+main = "#117bb8"
+grau1 ="#000000"
+grau2 ="#3F3F3F"
+grau3 ="#797878"
+grau4 = "#B4B4B4"
+
+colors <- c("Gymnasiale Maturität" =  main,
+            "Fach- & Berufsmaturität" = grau1,
+            "Berufsbildung EFZ" = grau2,
+            "Berufsbildung ohne EFZ" = grau3,
+            "Zwischenlösungen" = grau4)
+
+ggplot(df.ges,aes(x=Jahr)) +
+  geom_line(aes(y=`Gymnasiale Maturität`, 
+                group = Geschlecht,  
+                colour = "Gymnasiale Maturität"))+
+  geom_point(aes(y=`Gymnasiale Maturität`,
+                 shape = Geschlecht,
+                 colour = "Gymnasiale Maturität"))+
+
+  geom_line(aes(y=`Fach- & Berufsmaturität`, 
+                group = Geschlecht,
+                colour = "Fach- & Berufsmaturität"))+
+  geom_point(aes(y=`Fach- & Berufsmaturität`, 
+                 shape = Geschlecht,
+                 colour = "Fach- & Berufsmaturität"))+
+  
+  geom_line(aes(y=`Berufsbildung EFZ`, 
+                group = Geschlecht,
+                colour = "Berufsbildung EFZ"))+
+  geom_point(aes(y=`Berufsbildung EFZ`, 
+                 shape = Geschlecht,
+                 colour = "Berufsbildung EFZ"))+
+  
+    geom_line(aes(y=`Berufsbildung ohne EFZ`, 
+                group = Geschlecht,
+                colour = "Berufsbildung ohne EFZ"))+
+  geom_point(aes(y=`Berufsbildung ohne EFZ`, 
+                 shape = Geschlecht,
+                 colour = "Berufsbildung ohne EFZ"))+
+  
+    geom_line(aes(y=`Zwischenlösungen`, 
+                group = Geschlecht,
+                colour = "Zwischenlösungen"))+
+  geom_point(aes(y=`Zwischenlösungen`, 
+                 shape = Geschlecht,
+                 colour = "Zwischenlösungen"))+
+  
+  scale_shape_manual(values = c(16, 1))+
+  
+  labs(x = "Schuljahr",
+       y = "(%)",
+       color = "Bildungstypen") +
+  scale_color_manual(values = colors)+
+  ylim(0,70)+
+  my_theme+
+  geom_hline(yintercept=50, linetype="dashed", color = "#DADADA", size=1)+
+  ggtitle("Gymnasiale Maturität")+
+  theme(axis.text.x = element_text(angle=90))
+  
+  ggsave(path = analyse_folder,
+         filename = paste(c("P02-Gymnasiale Maturität",
+                            version.release, ".png"),
+                          collapse = ""),
+         height = 5,
+         width = 9,
+         dpi=900)
+  
+#----------------------------------------------------------
+#Plot03 Fach und Berufsmaturität
+#----------------------------------------------------------
+colors <- c("Gymnasiale Maturität" =  grau1,
+            "Fach- & Berufsmaturität" = main,
+            "Berufsbildung EFZ" = grau2,
+            "Berufsbildung ohne EFZ" = grau3,
+            "Zwischenlösungen" = grau4)
+  
+ggplot(df.ges,aes(x=Jahr)) +
+  geom_line(aes(y=`Gymnasiale Maturität`, 
+                group = Geschlecht,  
+                colour = "Gymnasiale Maturität"))+
+  geom_point(aes(y=`Gymnasiale Maturität`,
+                 shape = Geschlecht,
+                 colour = "Gymnasiale Maturität"))+
+
+  geom_line(aes(y=`Fach- & Berufsmaturität`, 
+                group = Geschlecht,
+                colour = "Fach- & Berufsmaturität"))+
+  geom_point(aes(y=`Fach- & Berufsmaturität`, 
+                 shape = Geschlecht,
+                 colour = "Fach- & Berufsmaturität"))+
+  
+  geom_line(aes(y=`Berufsbildung EFZ`, 
+                group = Geschlecht,
+                colour = "Berufsbildung EFZ"))+
+  geom_point(aes(y=`Berufsbildung EFZ`, 
+                 shape = Geschlecht,
+                 colour = "Berufsbildung EFZ"))+
+  
+    geom_line(aes(y=`Berufsbildung ohne EFZ`, 
+                group = Geschlecht,
+                colour = "Berufsbildung ohne EFZ"))+
+  geom_point(aes(y=`Berufsbildung ohne EFZ`, 
+                 shape = Geschlecht,
+                 colour = "Berufsbildung ohne EFZ"))+
+  
+    geom_line(aes(y=`Zwischenlösungen`, 
+                group = Geschlecht,
+                colour = "Zwischenlösungen"))+
+  geom_point(aes(y=`Zwischenlösungen`, 
+                 shape = Geschlecht,
+                 colour = "Zwischenlösungen"))+
+  
+  scale_shape_manual(values = c(16, 1))+
+  
+  labs(x = "Schuljahr",
+       y = "(%)",
+       color = "Bildungstypen") +
+  scale_color_manual(values = colors)+
+  ylim(0,20)+
+  my_theme+
+  geom_hline(yintercept=50, linetype="dashed", color = "#DADADA", size=1)+
+  ggtitle("Fach- & Berufsmaturität")+
+  theme(axis.text.x = element_text(angle=90))
+  
+  ggsave(path = analyse_folder,
+         filename = paste(c("P03-Fach und Berufsmaturität",
+                            version.release, ".png"),
+                          collapse = ""),
+         height = 5,
+         width = 9,
+         dpi=900)
+  
+  
+#----------------------------------------------------------
+#Plot04 Fach und Berufsmaturität Schlüssel 
+#----------------------------------------------------------
+colors <- c("Fach- & Berufsmaturität" =  main,
+            "Berufsmaturität" = "#0AE2E2",
+            "Fachmittelschulen" = "#FF8800",
+            "Fachmaturität" = "#00FF00",
+            "Handels- und Informatikmittelschulen" = "#FF00FF")
+
+ggplot(df.fh,aes(x=Jahr)) +
+  geom_line(aes(y=`Fach- & Berufsmaturität`, 
+                group = Geschlecht,  
+                colour = "Fach- & Berufsmaturität"))+
+  geom_point(aes(y=`Fach- & Berufsmaturität`,
+                 shape = Geschlecht,
+                 colour = "Fach- & Berufsmaturität"))+
+
+  geom_line(aes(y=Berufsmaturität, 
+                group = Geschlecht,
+                colour = "Berufsmaturität"))+
+  geom_point(aes(y=Berufsmaturität, 
+                 shape = Geschlecht,
+                 colour = "Berufsmaturität"))+
+  
+  geom_line(aes(y=Fachmittelschulen, 
+                group = Geschlecht,
+                colour = "Fachmittelschulen"))+
+  geom_point(aes(y=Fachmittelschulen, 
+                 shape = Geschlecht,
+                 colour = "Fachmittelschulen"))+
+  
+    geom_line(aes(y=Fachmaturität, 
+                group = Geschlecht,
+                colour = "Fachmaturität"))+
+  geom_point(aes(y=Fachmaturität, 
+                 shape = Geschlecht,
+                 colour = "Fachmaturität"))+
+  
+    geom_line(aes(y=`Handels- und Informatikmittelschulen`, 
+                group = Geschlecht,
+                colour = "Handels- und Informatikmittelschulen"))+
+  geom_point(aes(y=`Handels- und Informatikmittelschulen`, 
+                 shape = Geschlecht,
+                 colour = "Handels- und Informatikmittelschulen"))+
+  
+  scale_shape_manual(values = c(16, 1))+
+  
+  labs(x = "Schuljahr",
+       y = "(%)",
+       color = "Bildungstypen") +
+  scale_color_manual(values = colors)+
+  ylim(0,20)+
+  my_theme+
+  geom_hline(yintercept=50, linetype="dashed", color = "#DADADA", size=1)+
+  ggtitle("Fach- & Berufsmaturität einzelne Bildungstypen")+
+  theme(axis.text.x = element_text(angle=90))
+  
+  ggsave(path = analyse_folder,
+         filename = paste(c("P04-Fach und Berufsmaturität - einzelne Bildungstypen",
+                            version.release, ".png"),
+                          collapse = ""),
+         height = 5,
+         width = 9,
+         dpi=900)
+
+#----------------------------------------------------------
+#Plot05 Berufsbildung EFZ
+#----------------------------------------------------------
+colors <- c("Gymnasiale Maturität" =  grau1,
+            "Fach- & Berufsmaturität" = grau2,
+            "Berufsbildung EFZ" = main,
+            "Berufsbildung ohne EFZ" = grau3,
+            "Zwischenlösungen" = grau4)
+  
+ggplot(df.ges,aes(x=Jahr)) +
+  geom_line(aes(y=`Gymnasiale Maturität`, 
+                group = Geschlecht,  
+                colour = "Gymnasiale Maturität"))+
+  geom_point(aes(y=`Gymnasiale Maturität`,
+                 shape = Geschlecht,
+                 colour = "Gymnasiale Maturität"))+
+
+  geom_line(aes(y=`Fach- & Berufsmaturität`, 
+                group = Geschlecht,
+                colour = "Fach- & Berufsmaturität"))+
+  geom_point(aes(y=`Fach- & Berufsmaturität`, 
+                 shape = Geschlecht,
+                 colour = "Fach- & Berufsmaturität"))+
+  
+  geom_line(aes(y=`Berufsbildung EFZ`, 
+                group = Geschlecht,
+                colour = "Berufsbildung EFZ"))+
+  geom_point(aes(y=`Berufsbildung EFZ`, 
+                 shape = Geschlecht,
+                 colour = "Berufsbildung EFZ"))+
+  
+    geom_line(aes(y=`Berufsbildung ohne EFZ`, 
+                group = Geschlecht,
+                colour = "Berufsbildung ohne EFZ"))+
+  geom_point(aes(y=`Berufsbildung ohne EFZ`, 
+                 shape = Geschlecht,
+                 colour = "Berufsbildung ohne EFZ"))+
+  
+    geom_line(aes(y=`Zwischenlösungen`, 
+                group = Geschlecht,
+                colour = "Zwischenlösungen"))+
+  geom_point(aes(y=`Zwischenlösungen`, 
+                 shape = Geschlecht,
+                 colour = "Zwischenlösungen"))+
+  
+  scale_shape_manual(values = c(16, 1))+
+  
+  labs(x = "Schuljahr",
+       y = "(%)",
+       color = "Bildungstypen") +
+  scale_color_manual(values = colors)+
+  ylim(0,70)+
+  my_theme+
+  geom_hline(yintercept=50, linetype="dashed", color = "#DADADA", size=1)+
+  ggtitle("Berufsbildung EFZ")+
+  theme(axis.text.x = element_text(angle=90))
+  
+  ggsave(path = analyse_folder,
+         filename = paste(c("P05-Berufsbildung EFZt",
+                            version.release, ".png"),
+                          collapse = ""),
+         height = 5,
+         width = 9,
+         dpi=900)
+  
+#----------------------------------------------------------
+#Plot06 Berufsbildung ohne EFZ
+#----------------------------------------------------------
+colors <- c("Gymnasiale Maturität" =  grau1,
+            "Fach- & Berufsmaturität" = grau2,
+            "Berufsbildung EFZ" = grau3,
+            "Berufsbildung ohne EFZ" = main,
+            "Zwischenlösungen" = grau4)
+  
+ggplot(df.ges,aes(x=Jahr)) +
+  geom_line(aes(y=`Gymnasiale Maturität`, 
+                group = Geschlecht,  
+                colour = "Gymnasiale Maturität"))+
+  geom_point(aes(y=`Gymnasiale Maturität`,
+                 shape = Geschlecht,
+                 colour = "Gymnasiale Maturität"))+
+
+  geom_line(aes(y=`Fach- & Berufsmaturität`, 
+                group = Geschlecht,
+                colour = "Fach- & Berufsmaturität"))+
+  geom_point(aes(y=`Fach- & Berufsmaturität`, 
+                 shape = Geschlecht,
+                 colour = "Fach- & Berufsmaturität"))+
+  
+  geom_line(aes(y=`Berufsbildung EFZ`, 
+                group = Geschlecht,
+                colour = "Berufsbildung EFZ"))+
+  geom_point(aes(y=`Berufsbildung EFZ`, 
+                 shape = Geschlecht,
+                 colour = "Berufsbildung EFZ"))+
+  
+    geom_line(aes(y=`Berufsbildung ohne EFZ`, 
+                group = Geschlecht,
+                colour = "Berufsbildung ohne EFZ"))+
+  geom_point(aes(y=`Berufsbildung ohne EFZ`, 
+                 shape = Geschlecht,
+                 colour = "Berufsbildung ohne EFZ"))+
+  
+    geom_line(aes(y=`Zwischenlösungen`, 
+                group = Geschlecht,
+                colour = "Zwischenlösungen"))+
+  geom_point(aes(y=`Zwischenlösungen`, 
+                 shape = Geschlecht,
+                 colour = "Zwischenlösungen"))+
+  
+  scale_shape_manual(values = c(16, 1))+
+  
+  labs(x = "Schuljahr",
+       y = "(%)",
+       color = "Bildungstypen") +
+  scale_color_manual(values = colors)+
+  ylim(0,20)+
+  my_theme+
+  geom_hline(yintercept=50, linetype="dashed", color = "#DADADA", size=1)+
+  ggtitle("Berufsbildung ohne EFZ")+
+  theme(axis.text.x = element_text(angle=90))
+  
+  ggsave(path = analyse_folder,
+         filename = paste(c("P06-Berufsbildung n EFZ",
+                            version.release, ".png"),
+                          collapse = ""),
+         height = 5,
+         width = 9,
+         dpi=900)
+#----------------------------------------------------------
+#Plot07 Zwischenlösungen
+#----------------------------------------------------------
+colors <- c("Gymnasiale Maturität" =  grau1,
+            "Fach- & Berufsmaturität" = grau2,
+            "Berufsbildung EFZ" = grau3,
+            "Berufsbildung ohne EFZ" = grau4,
+            "Zwischenlösungen" = main)
+  
+ggplot(df.ges,aes(x=Jahr)) +
+  geom_line(aes(y=`Gymnasiale Maturität`, 
+                group = Geschlecht,  
+                colour = "Gymnasiale Maturität"))+
+  geom_point(aes(y=`Gymnasiale Maturität`,
+                 shape = Geschlecht,
+                 colour = "Gymnasiale Maturität"))+
+
+  geom_line(aes(y=`Fach- & Berufsmaturität`, 
+                group = Geschlecht,
+                colour = "Fach- & Berufsmaturität"))+
+  geom_point(aes(y=`Fach- & Berufsmaturität`, 
+                 shape = Geschlecht,
+                 colour = "Fach- & Berufsmaturität"))+
+  
+  geom_line(aes(y=`Berufsbildung EFZ`, 
+                group = Geschlecht,
+                colour = "Berufsbildung EFZ"))+
+  geom_point(aes(y=`Berufsbildung EFZ`, 
+                 shape = Geschlecht,
+                 colour = "Berufsbildung EFZ"))+
+  
+    geom_line(aes(y=`Berufsbildung ohne EFZ`, 
+                group = Geschlecht,
+                colour = "Berufsbildung ohne EFZ"))+
+  geom_point(aes(y=`Berufsbildung ohne EFZ`, 
+                 shape = Geschlecht,
+                 colour = "Berufsbildung ohne EFZ"))+
+  
+    geom_line(aes(y=`Zwischenlösungen`, 
+                group = Geschlecht,
+                colour = "Zwischenlösungen"))+
+  geom_point(aes(y=`Zwischenlösungen`, 
+                 shape = Geschlecht,
+                 colour = "Zwischenlösungen"))+
+  
+  scale_shape_manual(values = c(16, 1))+
+  
+  labs(x = "Schuljahr",
+       y = "(%)",
+       color = "Bildungstypen") +
+  scale_color_manual(values = colors)+
+  ylim(0,20)+
+  my_theme+
+  geom_hline(yintercept=50, linetype="dashed", color = "#DADADA", size=1)+
+  ggtitle("Zwischenlösungen")+
+  theme(axis.text.x = element_text(angle=90))
+  
+  ggsave(path = analyse_folder,
+         filename = paste(c("P06-Zwischenlösungen",
+                            version.release, ".png"),
+                          collapse = ""),
+         height = 5,
+         width = 9,
+         dpi=900)
+```
+
+
+
+
+```{r}
+#==========================================================
+#Berechnen der Entwicklung 1999-> 2020
+# und dem Delta  zwischen Mann und Frau
+#==========================================================
+#----------------------------------------------------------
+#Theme
+#----------------------------------------------------------
+sheet.ges = function(df.0, x){
+  #x = 2 # the selected colume
+  df.1 = df.0 %>% filter(Jahr == 1999 | Jahr == 2020, Geschlecht == "Mann")
+  df.1 = df.1[,-2:-((x-1))]
+  df.1 = df.1[,1:2]
+  
+  df.2 = df.0 %>% filter(Jahr == 1999 | Jahr == 2020, Geschlecht == "Frau")
+  df.2 = df.2[,(x)]
+  colnames(df.2) = c("Frau")
+  colnames(df.1) = c("Jahr","Mann")
+  df.1$Frau = df.2$Frau
+  df.1$delta = df.1$Mann-df.1$Frau
+  
+  df.1$Jahr = as.character(df.1$Jahr)
+  df.1[3,] = c("Entw", (df.1[2,2]-df.1[1,2]), (df.1[2,3]-df.1[1,3]), (df.1[2,4]-df.1[1,4]))
+  return(df.1)
+}
+
+df.fh.fh = sheet.ges(df.fh, 4)
+df.fh.bms= sheet.ges(df.fh, 5)
+df.fh.fms = sheet.ges(df.fh, 6)
+df.fh.fam = sheet.ges(df.fh, 7)
+df.fh.hui = sheet.ges(df.fh, 8)
+
+
+df.ges.uni = sheet.ges(df.ges, 4)
+df.ges.fh = sheet.ges(df.ges, 5)
+df.ges.efz = sheet.ges(df.ges, 6)
+df.ges.eba = sheet.ges(df.ges, 7)
+df.ges.sek = sheet.ges(df.ges, 8)
+
+
+#Berechnen uni & FH
+df.ges.uni.fh = df.ges.uni
+df.ges.uni.fh$Mann = df.ges.uni$Mann + df.ges.fh$Mann
+df.ges.uni.fh$Frau = df.ges.uni$Frau + df.ges.fh$Frau
+df.ges.uni.fh$delta = df.ges.uni.fh$Mann-df.ges.uni.fh$Frau
+  
+df.ges.uni.fh$Jahr = as.character(df.ges.uni.fh$Jahr)
+df.ges.uni.fh[3,] = c("Entw", (df.ges.uni.fh[2,2]-df.ges.uni.fh[1,2]), (df.ges.uni.fh[2,3]-df.ges.uni.fh[1,3]), (df.ges.uni.fh[2,4]-df.ges.uni.fh[1,4]))
+
+
+```
+
+```{r}
+#==========================================================
+#Kontrolle der Berechnungen
+#==========================================================
+df.ges$test_total = 
+  df.ges$`Gymnasiale Maturität`+
+  df.ges$`Fach- & Berufsmaturität`+
+  df.ges$`Berufsbildung EFZ`+
+  df.ges$`Berufsbildung ohne EFZ`+
+  df.ges$Zwischenlösungen
+
+df.fh$test_total = 
+  df.fh$Berufsmaturität +
+  df.fh$Fachmittelschulen +
+  df.fh$Fachmaturität +
+  df.fh$`Handels- und Informatikmittelschulen`
+  
+df.ges.2014 = df.ges %>% select(Jahr, Geschlecht, `Fach- & Berufsmaturität`, `Berufsbildung EFZ`)
+
+df.ges.2014 = df.ges.2014 %>% filter(Jahr == 2014)
+
+```
